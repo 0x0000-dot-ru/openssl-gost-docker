@@ -1,0 +1,8 @@
+FROM ubuntu:24.04 as base
+
+RUN echo "Install tools with gost-engine..." &&
+    apt-get update && \
+    apt-get upgrade -y && \
+    apt-get install -y --no-install-recommends openssl libengine-gost-openssl curl ca-certificates && \
+    sed -i '/\[openssl_init\]/a engines = engine_sect' /etc/ssl/openssl.cnf && \
+    echo "\n[engine_sect]\ngost=gost_sect\n[gost_sect]\nengine_id=gost\ndynamic_path=/usr/lib/x86_64-linux-gnu/engines-3/gost.so\ndefault_algorithms=ALL" >> /etc/ssl/openssl.cnf

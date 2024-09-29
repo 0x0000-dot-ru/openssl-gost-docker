@@ -1,0 +1,44 @@
+FROM ubuntu:22.04 as base
+
+RUN echo "Update base system..." && \
+    sed -i 's/^# deb-src/deb-src/' /etc/apt/sources.list && \
+    apt-get update && \
+    apt-get upgrade -y
+
+FROM base as build
+
+RUN echo "Install build environment..." && \
+    apt-get install -y build-essential git cmake libssl-dev pkg-config
+
+RUN echo "Clone gost-engine..." && \
+    mkdir src && \
+    cd src && \
+    git clone https://github.com/gost-engine/engine.git && \
+    cd engine && \
+    git submodule update --init
+
+RUN echo "Build gost-engine..." && \
+    cd src/engine/ && \
+    mkdir build && \
+    cd build && \
+    cmake -DCMAKE_BUILD_TYPE=Release .. && \
+    cmake --build . --config Release 
+
+FROM base as target
+
+COPY --from=build src/engine src/engine
+
+RUN echo "Install tools..." && \
+    apt-get install -y --no-install-recommends openssl curl make cmake ca-certificates && \
+    echo "Install gost-engine..." && \
+    cd src/engine/build && \
+    make install/fast && \
+    sed -i '/\[openssl_init\]/a engines = engine_sect' /etc/ssl/openssl.cnf && \
+    echo "\n[engine_sect]\ngost=gost_sect\n[gost_sect]\nengine_id=gost\ndynamic_path=/usr/lib/x86_64-linux-gnu/engines-3/gost.so\ndefault_algorithms=ALL" >> /etc/ssl/openssl.cnf && \
+    rm -rf /src/engine && \
+    apt-get purge -y cmake make && \
+    echo "Install russian CA certificates" && \
+    cd /usr/local/share/ca-certificates/ && \
+    curl -sOL https://gu-st.ru/content/lending/russian_trusted_sub_ca_pem.crt && \
+    curl -sOL https://gu-st.ru/content/lending/russian_trusted_root_ca_pem.crt && \
+    update-ca-certificates
